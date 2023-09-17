@@ -189,7 +189,7 @@ func outOpenPorts(openPorts []int, serviceFlag bool) {
 			Print("[∮] open ", port)
 			getServices(port)
 		} else {
-			Println("[∮] open ", port)
+			Println("[∮] open", port)
 		}
 	}
 }
