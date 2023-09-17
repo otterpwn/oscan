@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/semaphore"
+	"honnef.co/go/netdb"
 )
 
 var openPortsArray []int
@@ -29,6 +30,7 @@ type oscanner struct {
 // function to print cute banner ʕ •ᴥ•ʔ
 func printBanner() {
 	otterBanner := "ʕ •ᴥ•ʔ oscan by ottersec"
+	Println()
 	Println(otterBanner)
 	Println()
 }
@@ -116,7 +118,6 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 	if portArg == "all" {
 		return 1, 65535
 	} else if rangeRE.MatchString(portArg) {
-		Println("valid pattern")
 		firstPortString := strings.Split(portArg, "-")[0]
 		lastPortString := strings.Split(portArg, "-")[1]
 		firstPort, error := strconv.ParseInt(firstPortString, 10, 64)
@@ -139,16 +140,31 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 }
 
 func getServices(port int) {
-	Printf("getting service on port %d\n", port)
+	// based on
+	// https://www.socketloop.com/tutorials/golang-find-network-service-name-from-given-port-and-protocol
+	var protocol *netdb.Protoent
+	var service *netdb.Servent
+
+	protocol = netdb.GetProtoByName("tcp")
+	service = netdb.GetServByPort(port, protocol)
+
+	if service != nil {
+		Print(" - ", service.Name, "\n")
+	} else {
+		Print(" - ", "Uknown service", "\n")
+	}
+
 }
 
 func outOpenPorts(openPorts []int, serviceFlag bool) {
 	sort.Ints(openPorts)
 
 	for _, port := range openPorts {
-		Println(port)
 		if serviceFlag {
+			Print("[∮] open ", port)
 			getServices(port)
+		} else {
+			Println("[∮] open ", port)
 		}
 	}
 }
