@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +15,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 )
+
+var openPortsArray []int
 
 // define `oscanner` type
 // `ip` is the ip address to scan
@@ -25,21 +28,7 @@ type oscanner struct {
 
 // function to print cute banner ʕ •ᴥ•ʔ
 func printBanner() {
-	otterBanner :=
-		`
-⠀⠀⠀⠀⠀⠀⠀⢀⣀⡤⠴⠶⠶⠒⠲⠦⢤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⢀⡠⠞⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠲⠤⣄⡀⠀⠀⠀⠀⠀
-⠀⠀⣀⡴⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣤⡿⠀⠀⠀⠀⠀
-⠀⢾⣅⡀⠀⠀⠀⠀⣀⠀⠀⠀⠀⠀⠀⢀⡦⠤⠄⠀⠀⢻⡀⠀⠀⠀⠀⠀
-⠀⠈⢹⡏⠀⠀⠐⠋⠉⠁⠀⠻⢿⠟⠁⠀⠀⢤⠀⠀⠠⠤⢷⣤⣤⢤⡄⠀
-⠀⠀⣼⡤⠤⠀⠀⠘⣆⡀⠀⣀⡼⠦⣄⣀⡤⠊⠀⠀⠀⠤⣼⠟⠀⠀⢹⡂
-⠀⠊⣿⡠⠆⠀⠀⠀⠈⠉⠉⠙⠤⠤⠋⠀⠀⠀⠀⠀⠀⡰⠋⠀⠀⠀⡼⠁
-⠀⢀⡾⣧⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠜⠁⠀⠀⠀⣸⠁⠀
-⠀⠀⠀⡼⠙⠢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⠃⠀⠀
-⠀⢀⡞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⠃⠀⠀⠀
-⠀⡼⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀
-⣾⠁⠀⢀⣠⡴⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀
-⠈⠛⠻⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀`
+	otterBanner := "ʕ •ᴥ•ʔ oscan by ottersec"
 	Println(otterBanner)
 	Println()
 }
@@ -84,15 +73,13 @@ func scanPort(ip string, port int, timeout time.Duration) {
 		if strings.Contains(error.Error(), "Too many files open") {
 			time.Sleep(timeout)
 			scanPort(ip, port, timeout)
-		} else {
-			Println(port, "is closed")
 		}
 
 		return
 	}
 
 	connection.Close()
-	Println(port, "is open")
+	openPortsArray = append(openPortsArray, port)
 }
 
 func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
@@ -110,6 +97,16 @@ func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
 			scanPort(scanner.ip, port, timeout)
 		}(port)
 	}
+}
+
+func checkIfPresent(targetFlag string, arguments []string) bool {
+	for _, argument := range arguments {
+		if argument == targetFlag {
+			return true
+		}
+	}
+
+	return false
 }
 
 func parsePort(portArg string) (firstPort, lastPort int) {
@@ -141,11 +138,28 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 	return 0, 0
 }
 
+func getServices(port int) {
+	Printf("getting service on port %d\n", port)
+}
+
+func outOpenPorts(openPorts []int, serviceFlag bool) {
+	sort.Ints(openPorts)
+
+	for _, port := range openPorts {
+		Println(port)
+		if serviceFlag {
+			getServices(port)
+		}
+	}
+}
+
 func main() {
 	printBanner()
 
 	ipAddress := os.Args[1]
 	portArg := os.Args[2]
+
+	serviceBit := checkIfPresent("service", os.Args)
 
 	firstPort, lastPort := parsePort(portArg)
 
@@ -155,4 +169,5 @@ func main() {
 	}
 
 	ps.Start(firstPort, lastPort, 500*time.Millisecond)
+	outOpenPorts(openPortsArray, serviceBit)
 }
