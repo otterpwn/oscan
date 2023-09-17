@@ -1,0 +1,104 @@
+package ftp
+
+import (
+	. "fmt"
+	"io"
+	"os"
+	"os/exec"
+
+	FTP "github.com/jlaffaye/ftp"
+)
+
+// hardcoded default port for FTP
+var ftpPort int = 21
+
+// connect to FTP server and return client object
+func ConnectFTP(ip string) *FTP.ServerConn {
+	client, error := FTP.Dial(Sprintf("%s:%d", ip, ftpPort))
+
+	if error != nil {
+		Println("Error connecting to FTP server on port", ftpPort)
+		return nil
+	}
+
+	return client
+}
+
+// close the FTP connection
+func CloseFTP(client *FTP.ServerConn) {
+	client.Quit()
+}
+
+// checks if anonymous login is allowed on port 21
+func CheckAnonAuth(client *FTP.ServerConn) bool {
+
+	error := client.Login("anonymous", "anonymous")
+
+	if error != nil {
+		return false
+	}
+
+	client.Quit()
+	return true
+}
+
+// dumps recursively all the files on the FTP server
+// by default this uses anonymous:anonymous for anonymous login
+func DumpFTP(client *FTP.ServerConn) error {
+	Println("Dumping FTP files from server")
+
+	anonUser, anonPassword := "anonymous", "anonymous"
+	remotePath := "/"
+	localPath := "./ftp_dump"
+
+	error := client.Login(anonUser, anonPassword)
+	if error != nil {
+		Println("Cannot login to FTP with provided credentials")
+		return error
+	}
+
+	// create dump directory
+	if error := os.MkdirAll(localPath, 0755); error != nil {
+		Println("Error while creating `ftp_dump` directory to store dumped files")
+		return error
+	}
+
+	// list all entities in the server
+	entries, error := client.List(remotePath)
+	if error != nil {
+		Println("Cannot list contents of FTP server")
+		return error
+	}
+
+	for _, entry := range entries {
+		Println("Dumping contents of FTP server")
+		remoteFilePath := remotePath + "/" + entry.Name
+		localFilePath := localPath + "/" + entry.Name
+
+		// check if the entity is a file or a directory
+		if entry.Type == FTP.EntryTypeFolder {
+			if error := DumpFTP(client); error != nil {
+				return error
+			}
+		} else {
+			file, error := os.Create(localFilePath)
+			if error != nil {
+				return error
+			}
+			defer file.Close()
+
+			remoteFile, error := client.Retr(remoteFilePath)
+			if error != nil {
+				return error
+			}
+
+			_, error = io.Copy(file, remoteFile)
+			if error != nil {
+				return error
+			}
+		}
+
+	}
+
+	return nil
+}

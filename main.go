@@ -15,6 +15,8 @@ import (
 
 	"golang.org/x/sync/semaphore"
 	"honnef.co/go/netdb"
+
+	"oscan/ftp"
 )
 
 // global array used by all concurrent go functions to store open ports as ints
@@ -116,6 +118,17 @@ func checkIfPresent(targetFlag string, arguments []string) bool {
 	return false
 }
 
+// checks if the specified port is in the openPorts array
+func checkOpenPort(openPorts []int, targetPort int) bool {
+	for _, port := range openPorts {
+		if port == targetPort {
+			return true
+		}
+	}
+
+	return false
+}
+
 // function to parse the port argument from command line
 func parsePort(portArg string) (firstPort, lastPort int) {
 	// regex pattern for firtsport-lastport format
@@ -197,5 +210,22 @@ func main() {
 	}
 
 	ps.Start(firstPort, lastPort, 500*time.Millisecond)
+
+	// output for open ports section
 	outOpenPorts(openPortsArray, serviceBit)
+	Println()
+
+	// check if port 21 is open for FTP
+	if checkOpenPort(openPortsArray, 21) {
+		ftpClient := ftp.ConnectFTP(ipAddress)
+
+		// check if anonymous authentication is enabled
+		if ftp.CheckAnonAuth(ftpClient) {
+			Println("FTP Anonymous login is enabled on port 21")
+
+			if checkIfPresent("dump", os.Args) {
+				ftp.DumpFTP(ipAddress)
+			}
+		}
+	}
 }
