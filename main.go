@@ -4,7 +4,9 @@ import (
 	"context"
 	. "fmt"
 	"net"
+	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,7 +92,7 @@ func scanPort(ip string, port int, timeout time.Duration) {
 	}
 
 	connection.Close()
-	Println(port, "closed")
+	Println(port, "is open")
 }
 
 func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
@@ -110,13 +112,47 @@ func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
 	}
 }
 
+func parsePort(portArg string) (firstPort, lastPort int) {
+	rangePattern := `^\d+-\d+$`
+	rangeRE := regexp.MustCompile(rangePattern)
+
+	if portArg == "all" {
+		return 1, 65535
+	} else if rangeRE.MatchString(portArg) {
+		Println("valid pattern")
+		firstPortString := strings.Split(portArg, "-")[0]
+		lastPortString := strings.Split(portArg, "-")[1]
+		firstPort, error := strconv.ParseInt(firstPortString, 10, 64)
+
+		if error != nil {
+			panic(error)
+		}
+
+		lastPort, error := strconv.ParseInt(lastPortString, 10, 64)
+
+		if error != nil {
+			panic(error)
+		}
+
+		return int(firstPort), int(lastPort)
+	}
+
+	Println("Something went wrong in the port argument parsing function")
+	return 0, 0
+}
+
 func main() {
 	printBanner()
 
+	ipAddress := os.Args[1]
+	portArg := os.Args[2]
+
+	firstPort, lastPort := parsePort(portArg)
+
 	ps := &oscanner{
-		ip:        "127.0.0.1",
+		ip:        ipAddress,
 		threshold: semaphore.NewWeighted(Ulimit()),
 	}
 
-	ps.Start(1, 65535, 500*time.Millisecond)
+	ps.Start(firstPort, lastPort, 500*time.Millisecond)
 }
