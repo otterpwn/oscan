@@ -17,6 +17,7 @@ import (
 	"honnef.co/go/netdb"
 )
 
+// global array used by all concurrent go functions to store open ports as ints
 var openPortsArray []int
 
 // define `oscanner` type
@@ -84,6 +85,9 @@ func scanPort(ip string, port int, timeout time.Duration) {
 	openPortsArray = append(openPortsArray, port)
 }
 
+// define the `Start` method for the `oscanner` type
+// the method takes a set of ports and a timeout and executes the `scanPort`
+// function on all the ports in the range
 func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
 	waitgroup := sync.WaitGroup{}
 	defer waitgroup.Wait()
@@ -101,6 +105,7 @@ func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
 	}
 }
 
+// checks if the specified option is the command line arguments
 func checkIfPresent(targetFlag string, arguments []string) bool {
 	for _, argument := range arguments {
 		if argument == targetFlag {
@@ -111,12 +116,15 @@ func checkIfPresent(targetFlag string, arguments []string) bool {
 	return false
 }
 
+// function to parse the port argument from command line
 func parsePort(portArg string) (firstPort, lastPort int) {
+	// regex pattern for firtsport-lastport format
 	rangePattern := `^\d+-\d+$`
 	rangeRE := regexp.MustCompile(rangePattern)
 
 	if portArg == "all" {
 		return 1, 65535
+		// check if format firstport-lastport is matched
 	} else if rangeRE.MatchString(portArg) {
 		firstPortString := strings.Split(portArg, "-")[0]
 		lastPortString := strings.Split(portArg, "-")[1]
@@ -126,6 +134,7 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 			panic(error)
 		}
 
+		// parse port to int
 		lastPort, error := strconv.ParseInt(lastPortString, 10, 64)
 
 		if error != nil {
@@ -139,6 +148,7 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 	return 0, 0
 }
 
+// function that queries netdb to find service name on TCP port
 func getServices(port int) {
 	// based on
 	// https://www.socketloop.com/tutorials/golang-find-network-service-name-from-given-port-and-protocol
@@ -148,6 +158,7 @@ func getServices(port int) {
 	protocol = netdb.GetProtoByName("tcp")
 	service = netdb.GetServByPort(port, protocol)
 
+	// check if service was found, otherwise output unknown
 	if service != nil {
 		Print(" - ", service.Name, "\n")
 	} else {
@@ -156,6 +167,7 @@ func getServices(port int) {
 
 }
 
+// function that handles the open ports output and the service flag
 func outOpenPorts(openPorts []int, serviceFlag bool) {
 	sort.Ints(openPorts)
 
