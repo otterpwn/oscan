@@ -39,6 +39,16 @@ func printBanner() {
 	Println()
 }
 
+func printHelp() {
+	Println("Usage: oscan <ip_address> <port_range>\n")
+	Println("Options:")
+	Println("  ip_address: IP address or hostname of the target")
+	Println("  port_range: Port range to scan (e.g., '80', '20-100', 'all')")
+	Println("  service: Show service names for open ports")
+	Println("  dump: Dump content for open FTP or SMB ports with anonymous access")
+	Println("  help: Show this help message")
+}
+
 // function to retrieve the maximum number of file descriptors that
 // a process can handle using the linux command `ulimit`
 func Ulimit() int64 {
@@ -218,6 +228,11 @@ func enumSMB(ip string) {
 
 func main() {
 	printBanner()
+
+	if len(os.Args) < 3 || checkIfPresent("help", os.Args) {
+		printHelp()
+		return
+	}
 
 	ipAddress := os.Args[1]
 	portArg := os.Args[2]
