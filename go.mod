@@ -5,6 +5,7 @@ go 1.21.0
 require golang.org/x/sync v0.3.0
 
 require (
+	github.com/Ullaakut/nmap/v3 v3.0.2 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

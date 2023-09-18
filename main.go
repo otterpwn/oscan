@@ -3,33 +3,17 @@ package main
 import (
 	"context"
 	. "fmt"
-	"net"
 	"os"
-	"os/exec"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-	"honnef.co/go/netdb"
+	nmap "github.com/Ullaakut/nmap/v3"
 
 	"oscan/ftp"
 	"oscan/smb"
 )
-
-// global array used by all concurrent go functions to store open ports as ints
-var openPortsArray []int
-
-// define `oscanner` type
-// `ip` is the ip address to scan
-// `threshold` is the threshold that will limit the number of go routines running at a given time
-type oscanner struct {
-	ip        string
-	threshold *semaphore.Weighted
-}
 
 // function to print cute banner ʕ •ᴥ•ʔ
 func printBanner() {
@@ -49,77 +33,8 @@ func printHelp() {
 	Println("  help: Show this help message")
 }
 
-// function to retrieve the maximum number of file descriptors that
-// a process can handle using the linux command `ulimit`
-func Ulimit() int64 {
-	var hardcodedThreshold int64 = 1000
-
-	// execute `ulimit` command
-	output, error := exec.Command("sh", "-c", "ulimit", "-n").Output()
-
-	if error != nil {
-		panic(error)
-	}
-
-	// convert output of the command to variable
-	s := strings.TrimSpace(string(output))
-	if s == "unlimited" {
-		return hardcodedThreshold
-	}
-
-	number, error := strconv.ParseInt(s, 10, 64)
-
-	if error != nil {
-		panic(error)
-	}
-
-	return number
-}
-
-// function that scans a port on a given host with a specified timeout
-func scanPort(ip string, port int, timeout time.Duration) {
-	target := Sprintf("%s:%d", ip, port)
-
-	// connect to the given host and port
-	connection, error := net.DialTimeout("tcp", target, timeout)
-
-	if error != nil {
-		// handle file descriptor error
-		// wait for other routines to finish and scan the host and port again
-		if strings.Contains(error.Error(), "Too many files open") {
-			time.Sleep(timeout)
-			scanPort(ip, port, timeout)
-		}
-
-		return
-	}
-
-	connection.Close()
-	openPortsArray = append(openPortsArray, port)
-}
-
-// define the `Start` method for the `oscanner` type
-// the method takes a set of ports and a timeout and executes the `scanPort`
-// function on all the ports in the range
-func (scanner *oscanner) Start(firstPort, lastPort int, timeout time.Duration) {
-	waitgroup := sync.WaitGroup{}
-	defer waitgroup.Wait()
-
-	for port := firstPort; port <= lastPort; port++ {
-		waitgroup.Add(1)
-		scanner.threshold.Acquire(context.TODO(), 1)
-
-		go func(port int) {
-			defer scanner.threshold.Release(1)
-			defer waitgroup.Done()
-
-			scanPort(scanner.ip, port, timeout)
-		}(port)
-	}
-}
-
 // checks if the specified option is the command line arguments
-func checkIfPresent(targetFlag string, arguments []string) bool {
+func checkIfOption(targetFlag string, arguments []string) bool {
 	for _, argument := range arguments {
 		if argument == targetFlag {
 			return true
@@ -130,8 +45,8 @@ func checkIfPresent(targetFlag string, arguments []string) bool {
 }
 
 // checks if the specified port is in the openPorts array
-func checkOpenPort(openPorts []int, targetPort int) bool {
-	for _, port := range openPorts {
+func checkOpenPort(openPorts map[uint16]string, targetPort uint16) bool {
+	for port, _ := range openPorts {
 		if port == targetPort {
 			return true
 		}
@@ -172,35 +87,86 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 	return 0, 0
 }
 
-// function that queries netdb to find service name on TCP port
-func getServices(port int) {
-	// based on
-	// https://www.socketloop.com/tutorials/golang-find-network-service-name-from-given-port-and-protocol
-	var protocol *netdb.Protoent
-	var service *netdb.Servent
-
-	protocol = netdb.GetProtoByName("tcp")
-	service = netdb.GetServByPort(port, protocol)
-
-	// check if service was found, otherwise output unknown
-	if service != nil {
-		Print(" - ", service.Name, "\n")
-	} else {
-		Print(" - ", "Uknown service", "\n")
+func portRangeToString(firstPort, lastPort int) (string, error) {
+	var ports []string
+	for port := firstPort; port <= lastPort; port++ {
+		ports = append(ports, strconv.Itoa(port))
 	}
 
+	portString := strings.Join(ports, ",")
+
+	return portString, nil
+}
+
+func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMap map[uint16]string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	portRangeString, _ := portRangeToString(firstPort, lastPort)
+
+	scanner, error := nmap.NewScanner(
+		ctx,
+		nmap.WithTargets(ip),
+		nmap.WithPorts(portRangeString),
+	)
+
+	if error != nil {
+		Println("Error runnin scanner")
+		return
+	}
+
+	result, _, error := scanner.Run()
+	if error != nil {
+		Println("Error runnin scanner")
+		return
+	}
+
+	host := result.Hosts[0]
+
+	for _, port := range host.Ports {
+		portState := port.State.String()
+		serviceName := port.Service.String()
+
+		if portState == "open" {
+			openPortsMap[port.ID] = serviceName
+		} else if portState == "filtered" {
+			filteredPortsMap[port.ID] = serviceName
+		}
+	}
 }
 
 // function that handles the open ports output and the service flag
-func outOpenPorts(openPorts []int, serviceFlag bool) {
-	sort.Ints(openPorts)
-
-	for _, port := range openPorts {
+func outOpenPorts(openPorts map[uint16]string, serviceFlag bool) {
+	for port, serviceName := range openPorts {
 		if serviceFlag {
-			Print("[∮] open ", port)
-			getServices(port)
+			Println("[∮] open", port, "-", serviceName)
 		} else {
 			Println("[∮] open", port)
+		}
+	}
+	Println()
+}
+
+// function that handles the filtered ports output and the service flag
+func outFilteredPorts(filteredPorts map[uint16]string, serviceFlag bool) {
+	for port, serviceName := range filteredPorts {
+		if serviceFlag {
+			Println("[~] filtered", port, "-", serviceName)
+		} else {
+			Println("[~] filtered", port)
+		}
+	}
+	Println()
+}
+
+// checks for common services that can be enumerated automatically
+func checkEnumServices(openPorts map[uint16]string, ip string) {
+	for port, service := range openPorts {
+		switch {
+		case port == 21 && service == "ftp":
+			enumFTP(ip)
+		case port == 445 && service == "microsoft-ds":
+			enumSMB(ip)
 		}
 	}
 }
@@ -215,7 +181,7 @@ func enumFTP(ip string) {
 
 		// if the `dump` flag is specified and anon auth is enabled
 		// on the FTP server, dump its contents
-		if checkIfPresent("dump", os.Args) {
+		if checkIfOption("dump", os.Args) {
 			ftp.DumpFTP(ip)
 		}
 	}
@@ -223,13 +189,16 @@ func enumFTP(ip string) {
 
 // function to enumerate SMB with the `oscan/smb` module
 func enumSMB(ip string) {
-	smb.ListShares(ip, checkIfPresent("dump", os.Args))
+	smb.ListShares(ip, checkIfOption("dump", os.Args))
 }
 
 func main() {
+	openPortsMap := make(map[uint16]string)
+	filteredPortsMap := make(map[uint16]string)
+
 	printBanner()
 
-	if len(os.Args) < 3 || checkIfPresent("help", os.Args) {
+	if len(os.Args) < 3 || checkIfOption("help", os.Args) {
 		printHelp()
 		return
 	}
@@ -237,28 +206,13 @@ func main() {
 	ipAddress := os.Args[1]
 	portArg := os.Args[2]
 
-	serviceBit := checkIfPresent("service", os.Args)
-
 	firstPort, lastPort := parsePort(portArg)
+	serviceBit := checkIfOption("service", os.Args)
 
-	ps := &oscanner{
-		ip:        ipAddress,
-		threshold: semaphore.NewWeighted(Ulimit()),
-	}
+	scanPorts(ipAddress, firstPort, lastPort, openPortsMap, filteredPortsMap)
 
-	ps.Start(firstPort, lastPort, 500*time.Millisecond)
+	outOpenPorts(openPortsMap, serviceBit)
+	outFilteredPorts(filteredPortsMap, serviceBit)
 
-	// output for open ports section
-	outOpenPorts(openPortsArray, serviceBit)
-	Println()
-
-	// check if common ports are open
-	// FTP
-	if checkOpenPort(openPortsArray, 21) {
-		enumFTP(ipAddress)
-	}
-	// SMB
-	if checkOpenPort(openPortsArray, 445) {
-		enumSMB(ipAddress)
-	}
+	checkEnumServices(openPortsMap, ipAddress)
 }
