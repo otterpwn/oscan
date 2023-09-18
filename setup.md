@@ -1,3 +1,8 @@
+## Required tools
+1. `wget`
+2. `smbclient`
+
+## Go Environment setup
 ```
 cd oscan
 go env -w GO111MODULE=on
