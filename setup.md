@@ -5,4 +5,5 @@ go mod init oscan
 go get golang.org/x/sync/semaphore
 go get honnef.co/go/netdb
 go get github.com/jlaffaye/ftp
+go get github.com/hirochachacha/go-smb2
 ```

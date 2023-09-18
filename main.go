@@ -17,6 +17,7 @@ import (
 	"honnef.co/go/netdb"
 
 	"oscan/ftp"
+	"oscan/smb"
 )
 
 // global array used by all concurrent go functions to store open ports as ints
@@ -194,6 +195,27 @@ func outOpenPorts(openPorts []int, serviceFlag bool) {
 	}
 }
 
+// function to enumerate FTP with the `oscan/ftp` module
+func enumFTP(ip string) {
+	ftpClient := ftp.ConnectFTP(ip)
+
+	// check if anonymous authentication is enabled
+	if ftp.CheckAnonAuth(ftpClient) {
+		Println("FTP Anonymous login is enabled on port 21")
+
+		// if the `dump` flag is specified and anon auth is enabled
+		// on the FTP server, dump its contents
+		if checkIfPresent("dump", os.Args) {
+			ftp.DumpFTP(ip)
+		}
+	}
+}
+
+// function to enumerate SMB with the `oscan/smb` module
+func enumSMB(ip string) {
+	smb.ListShares(ip, checkIfPresent("dump", os.Args))
+}
+
 func main() {
 	printBanner()
 
@@ -215,17 +237,13 @@ func main() {
 	outOpenPorts(openPortsArray, serviceBit)
 	Println()
 
-	// check if port 21 is open for FTP
+	// check if common ports are open
+	// FTP
 	if checkOpenPort(openPortsArray, 21) {
-		ftpClient := ftp.ConnectFTP(ipAddress)
-
-		// check if anonymous authentication is enabled
-		if ftp.CheckAnonAuth(ftpClient) {
-			Println("FTP Anonymous login is enabled on port 21")
-
-			if checkIfPresent("dump", os.Args) {
-				ftp.DumpFTP(ipAddress)
-			}
-		}
+		enumFTP(ipAddress)
+	}
+	// SMB
+	if checkOpenPort(openPortsArray, 445) {
+		enumSMB(ipAddress)
 	}
 }
