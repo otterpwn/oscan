@@ -5,9 +5,9 @@ import (
 	. "fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	nmap "github.com/Ullaakut/nmap/v3"
 
@@ -104,25 +104,28 @@ func portRangeToString(firstPort, lastPort int) (string, error) {
 // set up and run scanner on specified ports
 // put results in open and filtered ports maps
 func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMap map[uint16]string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
 	portRangeString, _ := portRangeToString(firstPort, lastPort)
 
-	scanner, error := nmap.NewScanner(
-		ctx,
+	scanner, err := nmap.NewScanner(
+		context.Background(),
 		nmap.WithTargets(ip),
 		nmap.WithPorts(portRangeString),
 	)
 
-	if error != nil {
+	if err != nil {
 		Println("Error runnin scanner")
 		return
 	}
 
-	result, _, error := scanner.Run()
-	if error != nil {
+	done := make(chan error)
+	result, _, err := scanner.Async(done).Run()
+	if err != nil {
 		Println("Error runnin scanner")
+		return
+	}
+
+	if err := <-done; err != nil {
+		Println(err)
 		return
 	}
 
@@ -140,11 +143,29 @@ func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMa
 	}
 }
 
+// since a asynchronous scan is used, the ports need to be sorted before
+// being passed to the output function
+func sortPorts(openPorts map[uint16]string) []uint16 {
+	var sortedPorts []uint16
+
+	for port := range openPorts {
+		sortedPorts = append(sortedPorts, port)
+	}
+
+	sort.Slice(sortedPorts, func(i, j int) bool {
+		return sortedPorts[i] < sortedPorts[j]
+	})
+
+	return sortedPorts
+}
+
 // handle the open ports output and the service flag
 func outOpenPorts(openPorts map[uint16]string, serviceFlag bool) {
-	for port, serviceName := range openPorts {
+	sortedPorts := sortPorts(openPorts)
+
+	for _, port := range sortedPorts {
 		if serviceFlag {
-			Println("[∮] open", port, "-", serviceName)
+			Println("[∮] open", port, "-", openPorts[port])
 		} else {
 			Println("[∮] open", port)
 		}
@@ -154,9 +175,11 @@ func outOpenPorts(openPorts map[uint16]string, serviceFlag bool) {
 
 // handle the filtered ports output and the service flag
 func outFilteredPorts(filteredPorts map[uint16]string, serviceFlag bool) {
-	for port, serviceName := range filteredPorts {
+	sortedPorts := sortPorts(filteredPorts)
+
+	for _, port := range sortedPorts {
 		if serviceFlag {
-			Println("[~] filtered", port, "-", serviceName)
+			Println("[~] filtered", port, "-", filteredPorts[port])
 		} else {
 			Println("[~] filtered", port)
 		}
