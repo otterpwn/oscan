@@ -15,7 +15,7 @@ import (
 	"oscan/smb"
 )
 
-// function to print cute banner ʕ •ᴥ•ʔ
+// prints cute banner ʕ •ᴥ•ʔ
 func printBanner() {
 	otterBanner := "ʕ •ᴥ•ʔ oscan by ottersec"
 	Println()
@@ -23,13 +23,15 @@ func printBanner() {
 	Println()
 }
 
+// prints help menu
 func printHelp() {
-	Println("Usage: oscan <ip_address> <port_range>\n")
+	Println("Usage: oscan <ip_address> <port_range>")
+	Println()
 	Println("Options:")
 	Println("  ip_address: IP address or hostname of the target")
 	Println("  port_range: Port range to scan (e.g., '80', '20-100', 'all')")
 	Println("  service: Show service names for open ports")
-	Println("  dump: Dump content for open FTP or SMB ports with anonymous access")
+	Println("  dump: Dump available contents from services like FTP and SMB")
 	Println("  help: Show this help message")
 }
 
@@ -55,7 +57,7 @@ func checkOpenPort(openPorts map[uint16]string, targetPort uint16) bool {
 	return false
 }
 
-// function to parse the port argument from command line
+// parse the port argument from command line
 func parsePort(portArg string) (firstPort, lastPort int) {
 	// regex pattern for firtsport-lastport format
 	rangePattern := `^\d+-\d+$`
@@ -87,6 +89,7 @@ func parsePort(portArg string) (firstPort, lastPort int) {
 	return 0, 0
 }
 
+// convert firstPort-lastPort format to firstPort,firstPort+1,firstPort+2...lastPort
 func portRangeToString(firstPort, lastPort int) (string, error) {
 	var ports []string
 	for port := firstPort; port <= lastPort; port++ {
@@ -98,6 +101,8 @@ func portRangeToString(firstPort, lastPort int) (string, error) {
 	return portString, nil
 }
 
+// set up and run scanner on specified ports
+// put results in open and filtered ports maps
 func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMap map[uint16]string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -135,7 +140,7 @@ func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMa
 	}
 }
 
-// function that handles the open ports output and the service flag
+// handle the open ports output and the service flag
 func outOpenPorts(openPorts map[uint16]string, serviceFlag bool) {
 	for port, serviceName := range openPorts {
 		if serviceFlag {
@@ -147,7 +152,7 @@ func outOpenPorts(openPorts map[uint16]string, serviceFlag bool) {
 	Println()
 }
 
-// function that handles the filtered ports output and the service flag
+// handle the filtered ports output and the service flag
 func outFilteredPorts(filteredPorts map[uint16]string, serviceFlag bool) {
 	for port, serviceName := range filteredPorts {
 		if serviceFlag {
@@ -171,7 +176,7 @@ func checkEnumServices(openPorts map[uint16]string, ip string) {
 	}
 }
 
-// function to enumerate FTP with the `oscan/ftp` module
+// enumerate FTP with the `oscan/ftp` module
 func enumFTP(ip string) {
 	ftpClient := ftp.ConnectFTP(ip)
 
@@ -187,17 +192,20 @@ func enumFTP(ip string) {
 	}
 }
 
-// function to enumerate SMB with the `oscan/smb` module
+// enumerate SMB with the `oscan/smb` module
 func enumSMB(ip string) {
 	smb.ListShares(ip, checkIfOption("dump", os.Args))
 }
 
 func main() {
+	// initialize maps to store open/filtered ports and the respective service
 	openPortsMap := make(map[uint16]string)
 	filteredPortsMap := make(map[uint16]string)
 
 	printBanner()
 
+	// check if the binary is being ran with the right number of options
+	// if not, print the help menu
 	if len(os.Args) < 3 || checkIfOption("help", os.Args) {
 		printHelp()
 		return
@@ -207,10 +215,14 @@ func main() {
 	portArg := os.Args[2]
 
 	firstPort, lastPort := parsePort(portArg)
+
+	// check if the `service` flag is provided
+	// if it is, pass it to the output functions
 	serviceBit := checkIfOption("service", os.Args)
 
 	scanPorts(ipAddress, firstPort, lastPort, openPortsMap, filteredPortsMap)
 
+	// output section for open and filtered ports
 	outOpenPorts(openPortsMap, serviceBit)
 	outFilteredPorts(filteredPortsMap, serviceBit)
 
