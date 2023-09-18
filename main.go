@@ -58,35 +58,43 @@ func checkOpenPort(openPorts map[uint16]string, targetPort uint16) bool {
 }
 
 // parse the port argument from command line
-func parsePort(portArg string) (firstPort, lastPort int) {
+func parsePort(portArg string) string {
 	// regex pattern for firtsport-lastport format
 	rangePattern := `^\d+-\d+$`
+	singlePatter := `^\d{1,5}$`
+
 	rangeRE := regexp.MustCompile(rangePattern)
+	singleRE := regexp.MustCompile(singlePatter)
 
 	if portArg == "all" {
-		return 1, 65535
+		return "-"
+
+		// check if a single port is specified
+	} else if singleRE.MatchString(portArg) {
+		return portArg
+
 		// check if format firstport-lastport is matched
 	} else if rangeRE.MatchString(portArg) {
+		// extract ports from pattern
 		firstPortString := strings.Split(portArg, "-")[0]
 		lastPortString := strings.Split(portArg, "-")[1]
+
+		// parse ports to int
 		firstPort, error := strconv.ParseInt(firstPortString, 10, 64)
-
 		if error != nil {
 			panic(error)
 		}
-
-		// parse port to int
 		lastPort, error := strconv.ParseInt(lastPortString, 10, 64)
-
 		if error != nil {
 			panic(error)
 		}
 
-		return int(firstPort), int(lastPort)
+		portRangeString, _ := portRangeToString(int(firstPort), int(lastPort))
+		return portRangeString
 	}
 
 	Println("Something went wrong in the port argument parsing function")
-	return 0, 0
+	return "-"
 }
 
 // convert firstPort-lastPort format to firstPort,firstPort+1,firstPort+2...lastPort
@@ -103,9 +111,7 @@ func portRangeToString(firstPort, lastPort int) (string, error) {
 
 // set up and run scanner on specified ports
 // put results in open and filtered ports maps
-func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMap map[uint16]string) {
-	portRangeString, _ := portRangeToString(firstPort, lastPort)
-
+func scanPorts(ip string, portRangeString string, openPortsMap, filteredPortsMap map[uint16]string) {
 	scanner, err := nmap.NewScanner(
 		context.Background(),
 		nmap.WithTargets(ip),
@@ -120,7 +126,7 @@ func scanPorts(ip string, firstPort, lastPort int, openPortsMap, filteredPortsMa
 	done := make(chan error)
 	result, _, err := scanner.Async(done).Run()
 	if err != nil {
-		Println("Error runnin scanner")
+		Println("Error running scanner")
 		return
 	}
 
@@ -237,13 +243,13 @@ func main() {
 	ipAddress := os.Args[1]
 	portArg := os.Args[2]
 
-	firstPort, lastPort := parsePort(portArg)
+	portRangeString := parsePort(portArg)
 
 	// check if the `service` flag is provided
 	// if it is, pass it to the output functions
 	serviceBit := checkIfOption("service", os.Args)
 
-	scanPorts(ipAddress, firstPort, lastPort, openPortsMap, filteredPortsMap)
+	scanPorts(ipAddress, portRangeString, openPortsMap, filteredPortsMap)
 
 	// output section for open and filtered ports
 	outOpenPorts(openPortsMap, serviceBit)
