@@ -11,6 +11,6 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
 	github.com/jlaffaye/ftp v0.2.0 // indirect
-	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de // indirect
+	golang.org/x/crypto v0.13.0 // indirect
 	honnef.co/go/netdb v0.0.0-20210921115105-e902e863d85d // indirect
 )

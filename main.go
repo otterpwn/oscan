@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	nmap "github.com/Ullaakut/nmap/v3"
 
@@ -205,6 +206,17 @@ func checkEnumServices(openPorts map[uint16]string, ip string) {
 	}
 }
 
+// check if oscan is being ran as root
+func checkRoot() bool {
+	euid := syscall.Geteuid()
+
+	if euid == 0 {
+		return true
+	}
+
+	return false
+}
+
 // enumerate FTP with the `oscan/ftp` module
 func enumFTP(ip string) {
 	ftpClient := ftp.ConnectFTP(ip)
@@ -224,6 +236,37 @@ func enumFTP(ip string) {
 // enumerate SMB with the `oscan/smb` module
 func enumSMB(ip string) {
 	smb.ListShares(ip, checkIfOption("dump", os.Args))
+}
+
+// start a separate scan to enumerate host's OS
+func enumOS(ip string) (string, error) {
+	if !checkRoot() {
+		Println("[!] OS scan requires root permission")
+		return "", nil
+	}
+
+	scanner, err := nmap.NewScanner(
+		context.Background(),
+		nmap.WithTargets(ip),
+		nmap.WithOSDetection(),
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	done := make(chan error)
+	result, _, err := scanner.Async(done).Run()
+	if err != nil {
+		return "", err
+	}
+
+	if err := <-done; err != nil {
+		return "", err
+	}
+
+	host := result.Hosts[0]
+	return host.OS.Matches[0].Name, nil
 }
 
 func main() {
@@ -249,11 +292,24 @@ func main() {
 	// if it is, pass it to the output functions
 	serviceBit := checkIfOption("service", os.Args)
 
+	// check if the `service` flag is provided
+	// if it is, pass it to the output functions
+	osBit := checkIfOption("os", os.Args)
+
 	scanPorts(ipAddress, portRangeString, openPortsMap, filteredPortsMap)
 
 	// output section for open and filtered ports
 	outOpenPorts(openPortsMap, serviceBit)
 	outFilteredPorts(filteredPortsMap, serviceBit)
+
+	if osBit {
+		os, error := enumOS(ipAddress)
+		if error != nil {
+			Println("Something went wrong during OS enumeration:", error)
+		} else if os != "" {
+			Println("Running OS is", os)
+		}
+	}
 
 	checkEnumServices(openPortsMap, ipAddress)
 }
