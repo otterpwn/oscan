@@ -13,6 +13,7 @@ import (
 	nmap "github.com/Ullaakut/nmap/v3"
 
 	"oscan/ftp"
+	"oscan/ntp"
 	"oscan/smb"
 )
 
@@ -49,7 +50,7 @@ func checkIfOption(targetFlag string, arguments []string) bool {
 
 // checks if the specified port is in the openPorts array
 func checkOpenPort(openPorts map[uint16]string, targetPort uint16) bool {
-	for port, _ := range openPorts {
+	for port := range openPorts {
 		if port == targetPort {
 			return true
 		}
@@ -191,7 +192,6 @@ func outFilteredPorts(filteredPorts map[uint16]string, serviceFlag bool) {
 			Println("[~] filtered", port)
 		}
 	}
-	Println()
 }
 
 // checks for common services that can be enumerated automatically
@@ -217,6 +217,13 @@ func checkRoot() bool {
 	return false
 }
 
+// check if the detected OS is Winodws
+func checkWindows(os string) bool {
+	isWindows := regexp.MustCompile(`(?i)windows`).MatchString(os)
+
+	return isWindows
+}
+
 // enumerate FTP with the `oscan/ftp` module
 func enumFTP(ip string) {
 	ftpClient := ftp.ConnectFTP(ip)
@@ -236,6 +243,11 @@ func enumFTP(ip string) {
 // enumerate SMB with the `oscan/smb` module
 func enumSMB(ip string) {
 	smb.ListShares(ip, checkIfOption("dump", os.Args))
+}
+
+// enumerate NTP with the `oscan/ntp` module
+func enumNTP(ip string) {
+	ntp.SyncNTP(ip)
 }
 
 // start a separate scan to enumerate host's OS
@@ -308,6 +320,9 @@ func main() {
 			Println("[!] Something went wrong during OS enumeration:", error)
 		} else if os != "" {
 			Println("[*] Running OS is", os)
+			if checkWindows(os) {
+				enumNTP(ipAddress)
+			}
 		}
 	}
 
