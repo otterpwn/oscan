@@ -16,7 +16,7 @@ func ConnectFTP(ip string) *FTP.ServerConn {
 	client, error := FTP.Dial(Sprintf("%s:%d", ip, ftpPort))
 
 	if error != nil {
-		Println("Error connecting to FTP server on port", ftpPort)
+		Println("[!] Error connecting to FTP server on port", ftpPort)
 		return nil
 	}
 
@@ -61,7 +61,7 @@ func DumpFTP(ip string) error {
 
 	error := os.MkdirAll(localPath, os.ModePerm)
 	if error != nil {
-		Println("Error creating ftp_dump directory")
+		Println("[!] Error creating ftp_dump directory")
 		return error
 	}
 
@@ -70,11 +70,11 @@ func DumpFTP(ip string) error {
 
 	_, error = command.CombinedOutput()
 	if error != nil {
-		Println("There was an error while dumping the FTP files")
+		Println("[!] There was an error while dumping the FTP files")
 		return error
 	}
 
-	Println("Successfully dumped files from FTP server")
+	Println("[*] Successfully dumped files from FTP server")
 
 	return nil
 }

@@ -19,32 +19,33 @@ func ListShares(ip string, dumpFlag bool) error {
 	connection, error := net.Dial("tcp", server)
 
 	if error != nil {
-		Println("Error while connecting to SMB on port 445")
+		Println("[!] Error while connecting to SMB on port 445")
 		return error
 	}
 	defer connection.Close()
 
 	dialer := &SMB.Dialer{
 		Initiator: &SMB.NTLMInitiator{
-			User:	        "otter",
-			Password:	"",
+			User:     "otter",
+			Password: "",
 		},
 	}
 
 	client, error := dialer.Dial(connection)
 	if error != nil {
-		Println("Error while connecting to SMB on port 445")
+		Println("[!] Error while connecting to SMB on port 445")
 		return error
 	}
 	defer client.Logoff()
 
 	shares, error := client.ListSharenames()
 	if error != nil {
-		Println("Error while listing SMB shares")
+		Println("[!] Error while listing SMB shares")
 		return error
 	}
 
-	Println("Listing SMB Shares")	
+	Println()
+	Println("[*] Listing SMB Shares")
 	for _, share := range shares {
 		Println("    ", share)
 	}
@@ -74,32 +75,32 @@ func DumpShares(ip string, shares []string, client *SMB.Session) error {
 	localPath := "./smb_dump"
 
 	if !CheckSMBClient() {
-		Println("`smbclient` is not installed or not in PATH")
+		Println("[!] `smbclient` is not installed or not in PATH")
 	}
 
 	error := os.MkdirAll(localPath, os.ModePerm)
 	if error != nil {
-		Println("Error creating smb_dump directory")
+		Println("[!] Error creating smb_dump directory")
 		return error
 	}
 
 	for _, share := range shares {
 		shareUrl := Sprintf("//%s/%s", ip, share)
 
-		command := exec.Command("smbclient", shareUrl, "-N", "-c" ,"recurse ON; prompt OFF; lcd ./smb_dump; mget *")
+		command := exec.Command("smbclient", shareUrl, "-N", "-c", "recurse ON; prompt OFF; lcd ./smb_dump; mget *")
 
 		command.Dir = localPath
 		output, error := command.CombinedOutput()
 
 		if error == nil {
-			Println("Successfully dumped", share, "share")
+			Println("[*] Successfully dumped", share, "share")
 		}
 
 		if strings.Contains(string(output), "session setup failed") {
-			Println("SMB session setup failed")
+			Println("[!] SMB session setup failed")
 		}
 
 	}
-	
+
 	return nil
 }

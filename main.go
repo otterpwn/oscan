@@ -94,7 +94,7 @@ func parsePort(portArg string) string {
 		return portRangeString
 	}
 
-	Println("Something went wrong in the port argument parsing function")
+	Println("[!] Something went wrong in the port argument parsing function")
 	return "-"
 }
 
@@ -120,14 +120,14 @@ func scanPorts(ip string, portRangeString string, openPortsMap, filteredPortsMap
 	)
 
 	if err != nil {
-		Println("Error runnin scanner")
+		Println("[!] Error runnin scanner")
 		return
 	}
 
 	done := make(chan error)
 	result, _, err := scanner.Async(done).Run()
 	if err != nil {
-		Println("Error running scanner")
+		Println("[!] Error running scanner")
 		return
 	}
 
@@ -305,9 +305,9 @@ func main() {
 	if osBit {
 		os, error := enumOS(ipAddress)
 		if error != nil {
-			Println("Something went wrong during OS enumeration:", error)
+			Println("[!] Something went wrong during OS enumeration:", error)
 		} else if os != "" {
-			Println("Running OS is", os)
+			Println("[*] Running OS is", os)
 		}
 	}
 
