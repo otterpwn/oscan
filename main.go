@@ -13,6 +13,7 @@ import (
 	nmap "github.com/Ullaakut/nmap/v3"
 
 	"oscan/ftp"
+	"oscan/http"
 	"oscan/ntp"
 	"oscan/smb"
 )
@@ -202,6 +203,10 @@ func checkEnumServices(openPorts map[uint16]string, ip string) {
 			enumFTP(ip)
 		case port == 445 && service == "microsoft-ds":
 			enumSMB(ip)
+		case port == 80 && service == "http":
+			enumHTTP(ip)
+		case port == 443 && service == "https":
+			enumHTTP(ip)
 		}
 	}
 }
@@ -248,6 +253,11 @@ func enumSMB(ip string) {
 // enumerate NTP with the `oscan/ntp` module
 func enumNTP(ip string) {
 	ntp.SyncNTP(ip)
+}
+
+// enumerate HTTP with the `oscan/http` module
+func enumHTTP(ip string) {
+	http.GetHTTPDom(ip)
 }
 
 // start a separate scan to enumerate host's OS
